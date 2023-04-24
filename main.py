@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import datetime
 
 from telegram import __version__ as TG_VER
 
@@ -38,43 +39,82 @@ async def start(update, context):
 
 async def get_dz_subject(update, username):
     """Отправляет дз по предмету когда получена команда /get_dz_subject"""
-    await update.message.reply_text('''Выбкри предмет из списка ниже и напиши только его номер''')
+    await update.message.reply_text('''Выбери предмет из списка ниже и напиши только его номер''')
     text = update.message.text
+    not_done = "не сделано"
     result = cur.execute(f"""SELECT date, text FROM dz
-                WHERE subgect_id={int(text)} and user_id=(SELECT id FROM users WHERE user={username})""").fetchall()
+                WHERE subgect_id={int(text)} and state={not_done} and user_id=(SELECT id FROM users WHERE user={username})""").fetchall()
     result = [' '.join(list(i)) for i in result]
 
-    await update.message.reply_text('\n'.join(result))
+    await update.message.reply_text('\n'.join(result), reply_markup=markup)
 
 
 async def get_dz_day(update, context):
     """Отправляет дз на день когда получена команда /get_dz_day"""
-    await update.message.reply_text('''Выбкри предмет из списка ниже и напиши только его номер''')
+    await update.message.reply_text('''введите пожалуйста дату в формате dd-mm-yyyy''')
     text = update.message.text
+    not_done = "не сделано"
     result = cur.execute(f"""SELECT subgect_id, text FROM dz
-                    WHERE date={text} and user_id=(SELECT id FROM users WHERE user={username})""").fetchall()
+                    WHERE date={text} and state={not_done} and user_id=(SELECT id FROM users WHERE user={username})""").fetchall()
     for i in range(len(result)):
         date = cur.execute(f"""SELECT subgect FROM subgects
                     WHERE id={result[0]} and user_id=(SELECT id FROM users WHERE user={username})""").fetchall()
         result[i] = [date, result[i][1]]
     result = [' '.join(list(i)) for i in result]
 
-    await update.message.reply_text('\n'.join(result))
+    await update.message.reply_text('\n'.join(result), reply_markup=markup)
 
 
 
 
 async def get_dz_week(update, context):
     """Отправляет дз на неделю когда получена команда /get_dz_week"""
+    newdate = datetime.now()
+    newdate = newdate.strptime("%d.%m.%Y")
+    date_dz = {}
+    not_done = "не сделано"
+    for i in range(7):
+        dz = cur.execute(f"""SELECT subgect, text FROM dz
+                            WHERE date={newdate} and state={not_done} and user_id=(SELECT id FROM users WHERE user={username})""").fetchall()
+        for i in range(len(dz)):
+            date = cur.execute(f"""SELECT subgect FROM subgects
+                        WHERE id={dz[0]} and user_id=(SELECT id FROM users WHERE user={username})""").fetchall()
+            dz[i] = [date, dz[i][1]]
+        date_dz[newdate] = '\n'.join([': '.join(list(i)) for i in dz])
+    res = '\n...\n'.join(['\n'.join([i, date_dz[i]])for i in date_dz.keys()])
+    await update.message.reply_text(res, reply_markup=markup)
+
 
 
 async def add_dz(update, context):
     """Заносит новое дз в бд когда получена команда /add_dz"""
+    await update.message.reply_text('')
+    date = update.message.text
+    await update.message.reply_text('')
+    subject = update.message.text
+    await update.message.reply_text('')
+    text = update.message.text
+
+    user_id = cur.execute(f"""SELECT id FROM users WHERE user={username}""").fetchall()
+    not_done = "не сделано"
+
+    cur.execute(f"""INSERT INTO dz(user_id, subgect_id, date, text, state) VALUES({user_id}, {subject}, {date}, {text}, {not_done})""")
+    await update.message.reply_text('', reply_markup=markup)
+
 
 
 async def check_done(update, context):
     """Отмечает выполненное дз когда получена команда /check_done"""
-
+    await update.message.reply_text('введите пожалуйста дату в формате dd-mm-yyyy')
+    date = update.message.text
+    await update.message.reply_text('выберите нужный предмет из списка и введите только его номер')
+    subject = update.message.text
+    await update.message.reply_text('введите текст задания')
+    # можно предложить список на выбор текстов задани чтобы исключить ошибки и неточности
+    text = update.message.text
+    done = "сделано"
+    cur.execute(f"""UPDATE dz SET state={done} WHERE date={date} and subject_id={subject} and twxt={text}""").fetchall()
+    await update.message.reply_text('', reply_markup=markup)
 
 async def help(update, context):
     """Отправляет сообщение когда получена команда /help"""
